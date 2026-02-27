@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # ==================== 基础设施 ====================
+  # 数据库
   postgres:
     image: postgres:15-alpine
     environment:
@@ -18,6 +18,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # 缓存
   redis:
     image: redis:7-alpine
     ports:
@@ -30,6 +31,7 @@ services:
       timeout: 3s
       retries: 5
 
+  # 对象存储
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -47,7 +49,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ==================== 后端服务 ====================
+  # API 网关
   gateway:
     build:
       context: ../
@@ -55,7 +57,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SERVICE_NAME=gateway
+      - PORT=8080
       - DATABASE_URL=postgres://aitip:aitip@postgres:5432/aitip?sslmode=disable
       - REDIS_URL=redis://redis:6379
     depends_on:
@@ -63,71 +65,73 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
+  # 用户服务
+  user:
+    build:
+      context: ../
+      dockerfile: services/user/Dockerfile
+    environment:
+      - PORT=8081
+      - DATABASE_URL=postgres://aitip:aitip@postgres:5432/aitip?sslmode=disable
+      - JWT_SECRET=dev-secret-change-in-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 数据服务
+  data:
+    build:
+      context: ../
+      dockerfile: services/data/Dockerfile
+    environment:
+      - PORT=8082
+      - DATABASE_URL=postgres://aitip:aitip@postgres:5432/aitip?sslmode=disable
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # 训练服务
   training:
     build:
       context: ../
       dockerfile: services/training/Dockerfile
     environment:
-      - SERVICE_NAME=training
+      - PORT=8083
       - DATABASE_URL=postgres://aitip:aitip@postgres:5432/aitip?sslmode=disable
       - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
 
-  experiment:
+  # 推理服务
+  inference:
     build:
       context: ../
-      dockerfile: services/experiment/Dockerfile
+      dockerfile: services/inference/Dockerfile
     environment:
-      - SERVICE_NAME=experiment
+      - PORT=8084
       - DATABASE_URL=postgres://aitip:aitip@postgres:5432/aitip?sslmode=disable
-      - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
 
-  # ==================== 前端 ====================
+  # 前端
   web:
     build:
       context: ../web
       dockerfile: Dockerfile
     ports:
       - "3000:80"
-    environment:
-      - API_URL=http://gateway:8080
     depends_on:
       - gateway
-
-  # ==================== 开发工具 ====================
-  mlflow:
-    image: mlflow/mlflow:latest
-    ports:
-      - "5000:5000"
-    environment:
-      - MLFLOW_TRACKING_URI=postgresql://aitip:aitip@postgres:5432/mlflow
-      - MLFLOW_DEFAULT_ARTIFACT_ROOT=s3://mlflow/artifacts
-    command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5000
-    depends_on:
-      - postgres
-      - minio
 
 volumes:
   postgres_data:

@@ -1,0 +1,10 @@
+-- 回滚迁移
+DROP TABLE IF EXISTS metrics;
+DROP TABLE IF EXISTS inference_services;
+DROP TABLE IF EXISTS models;
+DROP TABLE IF EXISTS training_jobs;
+DROP TABLE IF EXISTS experiments;
+DROP TABLE IF EXISTS datasets;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS users;
