@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -273,7 +275,7 @@ func (h *JobHandler) streamLogsSSE(c *gin.Context, jobID uuid.UUID) {
 				fmt.Fprintf(w, "event: end\ndata: {}\n\n")
 				return false
 			}
-			
+
 			// 发送 SSE 事件
 			data, _ := json.Marshal(log)
 			fmt.Fprintf(w, "event: log\ndata: %s\n\n", data)
@@ -283,9 +285,3 @@ func (h *JobHandler) streamLogsSSE(c *gin.Context, jobID uuid.UUID) {
 		}
 	})
 }
-
-// Import needed for io and json
-import (
-	"encoding/json"
-	"io"
-)
