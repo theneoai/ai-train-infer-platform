@@ -6,6 +6,8 @@
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org)
 [![React](https://img.shields.io/badge/react-18-61DAFB.svg)](https://reactjs.org)
 [![Kubernetes](https://img.shields.io/badge/k8s-1.27+-326CE5.svg)](https://kubernetes.io)
+[![CI](https://github.com/theneoai/ai-train-infer-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/theneoai/ai-train-infer-platform/actions)
+[![Release](https://img.shields.io/github/v/release/theneoai/ai-train-infer-platform.svg)](https://github.com/theneoai/ai-train-infer-platform/releases)
 
 [English](./README_EN.md) | 中文
 
@@ -93,7 +95,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/plucky-groove3/ai-train-infer-platform.git
+git clone https://github.com/theneoai/ai-train-infer-platform.git
 cd ai-train-infer-platform
 
 # 2. 启动开发环境
@@ -452,6 +454,26 @@ T2.1: Setup Gin router and middleware chain
 - 灵感来自 [Run:ai](https://www.run.ai/), [Weights & Biases](https://wandb.ai/), [ClearML](https://clear.ml/)
 - UI 设计参考 [Vercel](https://vercel.com/), [Linear](https://linear.app/), [Raycast](https://www.raycast.com/)
 - 架构借鉴 [Kubernetes](https://kubernetes.io/), [Ray](https://www.ray.io/), [MLflow](https://mlflow.org/)
+
+---
+
+## 📊 项目状态
+
+| 指标 | 状态 |
+|------|------|
+| **版本** | v0.1.0 MVP |
+| **开发进度** | 4周完成核心功能 |
+| **代码行数** | ~38万行 |
+| **微服务** | 6个服务 + 前端 |
+| **CI/CD** | ✅ GitHub Actions |
+| **文档** | ✅ 完整 |
+
+## 🔄 最近更新
+
+- ✅ 2025-02-27: MVP 版本发布，包含训练、推理、实验追踪核心功能
+- ✅ 2025-02-27: Docker 执行器完善，支持 GPU 调度
+- ✅ 2025-02-27: React 前端 Dashboard 完成
+- ✅ 2025-02-27: CI/CD 流水线配置完成
 
 ---
 
