@@ -10,17 +10,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/database"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/logger"
-	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/minio"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/redis"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/response"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/config"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/handler"
+	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/minio"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/repository"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/service"
 	"go.uber.org/zap"
 )
+
+// Simple logger for initialization
+var log *zap.Logger
+
+func init() {
+	var err error
+	log, err = zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+}
 
 func main() {
 	// 加载配置
@@ -30,49 +37,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 初始化日志
-	if err := initLogger(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to init logger: %v\n", err)
-		os.Exit(1)
-	}
-
-	logger.Info("Starting data service...",
+	log.Info("Starting data service...",
 		zap.String("host", cfg.Server.Host),
 		zap.Int("port", cfg.Server.Port),
 	)
 
 	// 初始化数据库
-	db, err := database.New(cfg.Database.ToDatabaseConfig())
+	db, err := initDatabase(cfg)
 	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
+		log.Fatal("Failed to connect to database", zap.Error(err))
 	}
-	defer database.Close(db)
+	defer db.Close()
 
 	// 初始化 Redis
-	redisClient, err := redis.New(cfg.Redis.ToRedisConfig())
+	redisClient, err := initRedis(cfg)
 	if err != nil {
-		logger.Fatal("Failed to connect to redis", zap.Error(err))
+		log.Fatal("Failed to connect to redis", zap.Error(err))
 	}
 	defer redisClient.Close()
 
 	// 初始化 MinIO
 	minioClient, err := minio.New(cfg.MinIO.ToMinIOConfig())
 	if err != nil {
-		logger.Fatal("Failed to connect to minio", zap.Error(err))
+		log.Fatal("Failed to connect to minio", zap.Error(err))
 	}
 
 	// 测试 MinIO 连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := minioClient.HealthCheck(ctx); err != nil {
-		logger.Warn("MinIO health check failed", zap.Error(err))
+		log.Warn("MinIO health check failed", zap.Error(err))
 	}
 
 	// 初始化仓库
 	datasetRepo := repository.NewDatasetRepository(db)
 
 	// 初始化服务
-	datasetService := service.NewDatasetService(datasetRepo, minioClient, redisClient.GetClient(), cfg)
+	datasetService := service.NewDatasetService(datasetRepo, minioClient, redisClient, cfg)
 
 	// 初始化处理器
 	uploadConfig := handler.UploadConfig{
@@ -109,9 +110,9 @@ func main() {
 
 	// 启动服务器
 	go func() {
-		logger.Info("Server is running", zap.String("addr", srv.Addr))
+		log.Info("Server is running", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", zap.Error(err))
+			log.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
@@ -120,17 +121,17 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutting down server...")
+	log.Info("Shutting down server...")
 
 	// 优雅关闭
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Server forced to shutdown", zap.Error(err))
+		log.Error("Server forced to shutdown", zap.Error(err))
 	}
 
-	logger.Info("Server exited")
+	log.Info("Server exited")
 }
 
 // loadConfig 加载配置
@@ -144,7 +145,7 @@ func loadConfig() (*config.Config, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		// 如果配置文件加载失败，使用默认配置
-		logger.Warn("Failed to load config file, using defaults", zap.Error(err))
+		log.Warn("Failed to load config file, using defaults", zap.Error(err))
 		cfg = config.DefaultConfig()
 	}
 
@@ -160,8 +161,7 @@ func overrideConfigFromEnv(cfg *config.Config) {
 		cfg.Server.Host = host
 	}
 	if port := os.Getenv("SERVER_PORT"); port != "" {
-		if p, err := fmt.Sscanf(port, "%d", &cfg.Server.Port); p == 1 && err == nil {
-		}
+		fmt.Sscanf(port, "%d", &cfg.Server.Port)
 	}
 	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
 		cfg.Database.Host = dbHost
@@ -195,21 +195,6 @@ func overrideConfigFromEnv(cfg *config.Config) {
 	}
 }
 
-// initLogger 初始化日志
-func initLogger(cfg *config.Config) error {
-	logCfg := &logger.Config{
-		Level:      cfg.Log.Level,
-		Format:     cfg.Log.Format,
-		Output:     cfg.Log.Output,
-		FilePath:   cfg.Log.FilePath,
-		MaxSize:    cfg.Log.MaxSize,
-		MaxAge:     cfg.Log.MaxAge,
-		MaxBackups: cfg.Log.MaxBackups,
-		Compress:   cfg.Log.Compress,
-	}
-	return logger.Init(logCfg)
-}
-
 // loggerMiddleware 日志中间件
 func loggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -228,13 +213,12 @@ func loggerMiddleware() gin.HandlerFunc {
 			path = path + "?" + raw
 		}
 
-		logger.Info("HTTP Request",
+		log.Info("HTTP Request",
 			zap.String("client_ip", clientIP),
 			zap.String("method", method),
 			zap.String("path", path),
 			zap.Int("status", statusCode),
 			zap.Duration("latency", latency),
-			zap.String("error", c.Errors.String()),
 		)
 	}
 }
@@ -253,17 +237,5 @@ func corsMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
-	}
-}
-
-// errorHandler 错误处理中间件
-func errorHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-
-		if len(c.Errors) > 0 {
-			err := c.Errors.Last()
-			response.InternalServerError(c, err.Error())
-		}
 	}
 }
