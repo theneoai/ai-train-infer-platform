@@ -82,3 +82,9 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/plucky-groove3/ai-train-infer-platform/pkg/database => ./pkg/database
+replace github.com/plucky-groove3/ai-train-infer-platform/pkg/logger => ./pkg/logger
+replace github.com/plucky-groove3/ai-train-infer-platform/pkg/minio => ./pkg/minio
+replace github.com/plucky-groove3/ai-train-infer-platform/pkg/redis => ./pkg/redis
+replace github.com/plucky-groove3/ai-train-infer-platform/pkg/response => ./pkg/response
