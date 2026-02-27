@@ -191,7 +191,7 @@ func (e *DockerExecutor) buildDockerArgs(job *domain.TrainingJob) []string {
 
 	// GPU 支持
 	if job.GPUCount > 0 {
-		args = append(args, "--gpus", fmt.Sprintf("'"nvidia=%d"'", job.GPUCount))
+		args = append(args, "--gpus", fmt.Sprintf("nvidia=%d", job.GPUCount))
 	}
 
 	// CPU 限制

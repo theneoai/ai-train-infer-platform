@@ -39,18 +39,10 @@ func (h *JobHandler) RegisterRoutes(router *gin.RouterGroup) {
 }
 
 // CreateJob 创建训练任务
-// @Summary 创建训练任务
-// @Description 创建新的训练任务
-// @Tags Training
-// @Accept json
-// @Produce json
-// @Param request body domain.CreateJobRequest true "创建任务请求"
-// @Success 200 {object} response.Response{data=domain.JobResponse}
-// @Router /api/v1/training/jobs [post]
 func (h *JobHandler) CreateJob(c *gin.Context) {
 	var req domain.CreateJobRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("Invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("Invalid request: %v", err))
 		return
 	}
 
@@ -62,13 +54,13 @@ func (h *JobHandler) CreateJob(c *gin.Context) {
 	}
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		response.BadRequest(c, "Invalid user_id")
+		response.Error(c, http.StatusBadRequest, "Invalid user_id")
 		return
 	}
 
 	job, err := h.service.CreateJob(c.Request.Context(), userID, &req)
 	if err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -76,23 +68,16 @@ func (h *JobHandler) CreateJob(c *gin.Context) {
 }
 
 // GetJob 获取任务详情
-// @Summary 获取训练任务详情
-// @Description 根据 ID 获取训练任务详情
-// @Tags Training
-// @Produce json
-// @Param id path string true "任务 ID"
-// @Success 200 {object} response.Response{data=domain.JobResponse}
-// @Router /api/v1/training/jobs/{id} [get]
 func (h *JobHandler) GetJob(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid job ID")
+		response.Error(c, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
 
 	job, err := h.service.GetJob(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "Training job")
+		response.Error(c, http.StatusNotFound, "Training job not found")
 		return
 	}
 
@@ -100,27 +85,16 @@ func (h *JobHandler) GetJob(c *gin.Context) {
 }
 
 // ListJobs 列出训练任务
-// @Summary 列出训练任务
-// @Description 分页列出训练任务
-// @Tags Training
-// @Produce json
-// @Param project_id query string false "项目 ID"
-// @Param experiment_id query string false "实验 ID"
-// @Param status query string false "任务状态"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} response.PageResponse{data=[]domain.JobResponse}
-// @Router /api/v1/training/jobs [get]
 func (h *JobHandler) ListJobs(c *gin.Context) {
 	var req domain.ListJobsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("Invalid query parameters: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("Invalid query parameters: %v", err))
 		return
 	}
 
 	jobs, total, err := h.service.ListJobs(c.Request.Context(), &req)
 	if err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -130,35 +104,37 @@ func (h *JobHandler) ListJobs(c *gin.Context) {
 		responses[i] = job.ToResponse()
 	}
 
-	response.PageSuccess(c, responses, req.Page, req.PageSize, total)
+	// 计算总页数
+	totalPages := int(total) / req.PageSize
+	if int(total)%req.PageSize > 0 {
+		totalPages++
+	}
+
+	response.SuccessWithMeta(c, responses, &response.MetaInfo{
+		Page:      req.Page,
+		PageSize:  req.PageSize,
+		Total:     total,
+		TotalPage: totalPages,
+	})
 }
 
 // UpdateJob 更新训练任务
-// @Summary 更新训练任务
-// @Description 更新训练任务信息
-// @Tags Training
-// @Accept json
-// @Produce json
-// @Param id path string true "任务 ID"
-// @Param request body domain.UpdateJobRequest true "更新请求"
-// @Success 200 {object} response.Response{data=domain.JobResponse}
-// @Router /api/v1/training/jobs/{id} [put]
 func (h *JobHandler) UpdateJob(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid job ID")
+		response.Error(c, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
 
 	var req domain.UpdateJobRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("Invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("Invalid request: %v", err))
 		return
 	}
 
 	job, err := h.service.UpdateJob(c.Request.Context(), id, &req)
 	if err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -166,43 +142,31 @@ func (h *JobHandler) UpdateJob(c *gin.Context) {
 }
 
 // DeleteJob 删除训练任务
-// @Summary 删除训练任务
-// @Description 删除训练任务
-// @Tags Training
-// @Param id path string true "任务 ID"
-// @Success 200 {object} response.Response
-// @Router /api/v1/training/jobs/{id} [delete]
 func (h *JobHandler) DeleteJob(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid job ID")
+		response.Error(c, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
 
 	if err := h.service.DeleteJob(c.Request.Context(), id); err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(c, nil)
+	response.NoContent(c)
 }
 
 // StopJob 停止训练任务
-// @Summary 停止训练任务
-// @Description 停止正在运行的训练任务
-// @Tags Training
-// @Param id path string true "任务 ID"
-// @Success 200 {object} response.Response
-// @Router /api/v1/training/jobs/{id}/stop [post]
 func (h *JobHandler) StopJob(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid job ID")
+		response.Error(c, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
 
 	if err := h.service.StopJob(c.Request.Context(), id); err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -210,17 +174,10 @@ func (h *JobHandler) StopJob(c *gin.Context) {
 }
 
 // GetLogs 获取训练日志（SSE 流式）
-// @Summary 获取训练日志
-// @Description 获取训练任务的日志（支持 SSE 流式）
-// @Tags Training
-// @Param id path string true "任务 ID"
-// @Param stream query bool false "是否流式输出" default(false)
-// @Success 200 {object} response.Response{data=[]domain.LogEntry}
-// @Router /api/v1/training/jobs/{id}/logs [get]
 func (h *JobHandler) GetLogs(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid job ID")
+		response.Error(c, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
 
@@ -240,7 +197,7 @@ func (h *JobHandler) GetLogs(c *gin.Context) {
 
 	logs, err := h.service.GetLogs(c.Request.Context(), id, start, count)
 	if err != nil {
-		response.ErrorWithMessage(c, response.ErrorInternalServer, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
