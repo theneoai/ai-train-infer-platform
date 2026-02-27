@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -391,7 +389,7 @@ export function Dashboard() {
               <Server className="mr-2 h-4 w-4" />
               部署推理服务
             </Button>
-            <Button className="justify-start" variant="outline" onClick={() => navigate({ to: '/experiments' })}>
+            <Button className="justify-start" variant="outline" onClick={() => navigate({ to: '/experiments' as '/inference' })}>
               <Activity className="mr-2 h-4 w-4" />
               查看实验
             </Button>

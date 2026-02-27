@@ -7,15 +7,12 @@ import {
   Clock,
   Cpu,
   HardDrive,
-  Activity,
-  AlertCircle,
-  CheckCircle,
-  Play,
   RefreshCw,
   Terminal,
   BarChart3,
   FileText,
   Settings,
+  AlertCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -84,7 +81,7 @@ export function TrainingDetail() {
   const fetchJob = async () => {
     try {
       setError(null)
-      const response = await trainingApi.get(jobId) as TrainingJob
+      const response = await trainingApi.get(jobId) as unknown as TrainingJob
       setJob(response)
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取任务详情失败')

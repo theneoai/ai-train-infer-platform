@@ -73,7 +73,7 @@ const statusIcons = {
 }
 
 export function InferenceList() {
-  const [services, setServices] = useState<InferenceService[]>(mockServices)
+  const [services] = useState<InferenceService[]>(mockServices)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -264,7 +264,7 @@ export function InferenceList() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(v: string) => setStatusFilter(v)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>

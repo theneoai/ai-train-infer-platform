@@ -84,7 +84,7 @@ export function DatasetList() {
     setLoading(true)
     setError(null)
     try {
-      const response = await datasetApi.list() as { datasets: Dataset[] } | Dataset[]
+      const response = await datasetApi.list() as unknown as { datasets: Dataset[] } | Dataset[]
       if (Array.isArray(response)) {
         setDatasets(response)
       } else if (response && 'datasets' in response) {
@@ -163,7 +163,7 @@ export function DatasetList() {
   }
 
   // Get file icon based on format
-  const getFileIcon = (format: string) => {
+  const getFileIcon = (_format: string) => {
     const colorClass = 'text-muted-foreground'
     return <FileText className={`h-5 w-5 ${colorClass}`} />
   }

@@ -4,8 +4,6 @@ import {
   Search,
   Filter,
   Plus,
-  MoreHorizontal,
-  Play,
   Square,
   Trash2,
   Clock,
@@ -83,7 +81,7 @@ export function TrainingList() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([
+  const [datasets] = useState<Array<{ id: string; name: string }>>([
     { id: '1', name: 'ImageNet-1K' },
     { id: '2', name: 'COCO 2017' },
     { id: '3', name: 'GLUE Benchmark' },
@@ -93,7 +91,6 @@ export function TrainingList() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
-  const [totalCount, setTotalCount] = useState(0)
 
   // Form state
   const [formData, setFormData] = useState<CreateJobFormData>({
@@ -112,19 +109,14 @@ export function TrainingList() {
     setLoading(true)
     setError(null)
     try {
-      // In a real app, we would pass pagination params to the API
-      const response = await trainingApi.list() as { jobs: TrainingJob[]; total: number }
+      const response = await trainingApi.list() as unknown as { jobs: TrainingJob[]; total: number }
       if (response && response.jobs) {
         setJobs(response.jobs)
-        setTotalCount(response.total || response.jobs.length)
       } else {
-        // Fallback to empty array if response format differs
-        setJobs(Array.isArray(response) ? response : [])
-        setTotalCount(Array.isArray(response) ? response.length : 0)
+        setJobs(Array.isArray(response) ? response as TrainingJob[] : [])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取训练任务失败')
-      // Keep existing jobs on error
     } finally {
       setLoading(false)
     }
@@ -227,7 +219,7 @@ export function TrainingList() {
               />
             </div>
             <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+              <Select value={statusFilter} onValueChange={(v: string) => { setStatusFilter(v); setCurrentPage(1); }}>
                 <SelectTrigger className="w-[140px]">
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder="状态" />
@@ -426,7 +418,7 @@ export function TrainingList() {
               <Select
                 required
                 value={formData.dataset_id}
-                onValueChange={(v) => setFormData({ ...formData, dataset_id: v })}
+                onValueChange={(v: string) => setFormData({ ...formData, dataset_id: v })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="选择数据集" />
@@ -443,7 +435,7 @@ export function TrainingList() {
                 <label className="text-sm font-medium">GPU 数量</label>
                 <Select
                   value={formData.gpu_count.toString()}
-                  onValueChange={(v) => setFormData({ ...formData, gpu_count: parseInt(v) })}
+                  onValueChange={(v: string) => setFormData({ ...formData, gpu_count: parseInt(v) })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择 GPU" />
