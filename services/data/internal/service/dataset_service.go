@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/logger"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/minio"
+	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/minio"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/config"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/domain"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/repository"

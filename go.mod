@@ -1,6 +1,6 @@
 module github.com/plucky-groove3/ai-train-infer-platform
 
-go 1.24.0
+go 1.21
 
 require (
 	github.com/gin-gonic/gin v1.11.0
@@ -82,9 +82,3 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/plucky-groove3/ai-train-infer-platform/pkg/database => ./pkg/database
-replace github.com/plucky-groove3/ai-train-infer-platform/pkg/logger => ./pkg/logger
-replace github.com/plucky-groove3/ai-train-infer-platform/pkg/minio => ./pkg/minio
-replace github.com/plucky-groove3/ai-train-infer-platform/pkg/redis => ./pkg/redis
-replace github.com/plucky-groove3/ai-train-infer-platform/pkg/response => ./pkg/response

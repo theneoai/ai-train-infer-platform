@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/database"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/logger"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/minio"
+	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/minio"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/redis"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/response"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/config"

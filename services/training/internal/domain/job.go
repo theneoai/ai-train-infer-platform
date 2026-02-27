@@ -228,3 +228,45 @@ type LogEntry struct {
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+// MetricRecord 指标记录（用于 WebSocket 推送）
+type MetricRecord struct {
+	ID          uuid.UUID       `json:"id"`
+	JobID       uuid.UUID       `json:"job_id"`
+	Timestamp   time.Time       `json:"timestamp"`
+	MetricType  string          `json:"metric_type"` // loss, accuracy, val_loss, val_accuracy, custom
+	Epoch       *int            `json:"epoch,omitempty"`
+	Step        *int            `json:"step,omitempty"`
+	Value       float64         `json:"value"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// JobEvent 任务事件
+type JobEvent struct {
+	Type      string    `json:"type"` // created, started, completed, failed, stopped
+	JobID     uuid.UUID `json:"job_id"`
+	Status    JobStatus `json:"status"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// ContainerInfo 容器信息
+type ContainerInfo struct {
+	ContainerID   string            `json:"container_id"`
+	ContainerName string            `json:"container_name"`
+	Image         string            `json:"image"`
+	Status        string            `json:"status"`
+	State         string            `json:"state"`
+	ExitCode      int               `json:"exit_code"`
+	StartedAt     *time.Time        `json:"started_at,omitempty"`
+	FinishedAt    *time.Time        `json:"finished_at,omitempty"`
+	Ports         map[string][]PortBinding `json:"ports,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
+}
+
+// PortBinding 端口绑定
+type PortBinding struct {
+	HostIP   string `json:"host_ip"`
+	HostPort string `json:"host_port"`
+}

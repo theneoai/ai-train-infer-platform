@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/database"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/minio"
+	"github.com/plucky-groove3/ai-train-infer-platform/services/data/internal/minio"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/redis"
 	"github.com/spf13/viper"
 )

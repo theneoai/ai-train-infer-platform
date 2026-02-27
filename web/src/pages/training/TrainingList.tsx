@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Search,
@@ -6,14 +6,14 @@ import {
   Plus,
   MoreHorizontal,
   Play,
-  Pause,
   Square,
   Trash2,
   Clock,
   Cpu,
-  HardDrive,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,7 +34,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -45,19 +44,8 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import type { TrainingJob, JobStatus } from '@/types'
-import { formatDate, formatBytes, formatDuration } from '@/lib/utils'
-
-// Mock data
-const mockJobs: TrainingJob[] = [
-  { id: '1', name: 'ResNet-50 ImageNet', status: 'running', progress: 65, createdAt: '2024-01-15T08:00:00Z', updatedAt: '2024-01-15T10:30:00Z', gpuCount: 4, gpuUsage: 78, memoryUsage: 32 * 1024 ** 3, duration: 3600 * 2.5, modelType: 'ResNet', dataset: 'ImageNet', priority: 'high' },
-  { id: '2', name: 'BERT Fine-tuning', status: 'completed', progress: 100, createdAt: '2024-01-14T06:00:00Z', updatedAt: '2024-01-14T14:30:00Z', gpuCount: 2, gpuUsage: 0, memoryUsage: 16 * 1024 ** 3, duration: 3600 * 8.5, modelType: 'BERT', dataset: 'GLUE', priority: 'normal' },
-  { id: '3', name: 'GPT-2 Pretraining', status: 'pending', progress: 0, createdAt: '2024-01-15T11:00:00Z', updatedAt: '2024-01-15T11:00:00Z', gpuCount: 8, gpuUsage: 0, memoryUsage: 0, duration: 0, modelType: 'GPT', dataset: 'OpenWebText', priority: 'high' },
-  { id: '4', name: 'YOLOv8 Detection', status: 'running', progress: 32, createdAt: '2024-01-15T09:30:00Z', updatedAt: '2024-01-15T10:45:00Z', gpuCount: 2, gpuUsage: 92, memoryUsage: 20 * 1024 ** 3, duration: 3600 * 1.25, modelType: 'YOLO', dataset: 'COCO', priority: 'normal' },
-  { id: '5', name: 'CLIP Contrastive', status: 'failed', progress: 45, createdAt: '2024-01-14T12:00:00Z', updatedAt: '2024-01-14T15:20:00Z', gpuCount: 4, gpuUsage: 0, memoryUsage: 0, duration: 3600 * 3.33, modelType: 'CLIP', dataset: 'LAION-400M', priority: 'low' },
-  { id: '6', name: 'Stable Diffusion Fine-tune', status: 'running', progress: 78, createdAt: '2024-01-15T07:00:00Z', updatedAt: '2024-01-15T10:50:00Z', gpuCount: 4, gpuUsage: 85, memoryUsage: 38 * 1024 ** 3, duration: 3600 * 3.83, modelType: 'Stable Diffusion', dataset: 'Custom', priority: 'high' },
-  { id: '7', name: 'T5 Summarization', status: 'cancelled', progress: 23, createdAt: '2024-01-13T10:00:00Z', updatedAt: '2024-01-13T12:30:00Z', gpuCount: 2, gpuUsage: 0, memoryUsage: 0, duration: 3600 * 2.5, modelType: 'T5', dataset: 'CNN/DailyMail', priority: 'low' },
-  { id: '8', name: 'ViT Classification', status: 'completed', progress: 100, createdAt: '2024-01-12T08:00:00Z', updatedAt: '2024-01-12T16:00:00Z', gpuCount: 2, gpuUsage: 0, memoryUsage: 0, duration: 3600 * 8, modelType: 'ViT', dataset: 'CIFAR-10', priority: 'normal' },
-]
+import { formatDate, formatDuration } from '@/lib/utils'
+import { trainingApi } from '@/services/api'
 
 const statusColors: Record<JobStatus, 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pending: 'secondary',
@@ -67,37 +55,145 @@ const statusColors: Record<JobStatus, 'default' | 'secondary' | 'destructive' | 
   cancelled: 'warning',
 }
 
+const statusLabels: Record<JobStatus, string> = {
+  pending: '待处理',
+  running: '运行中',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已取消',
+}
+
+interface CreateJobFormData {
+  name: string
+  dataset_id: string
+  gpu_count: number
+  config: {
+    learning_rate: number
+    batch_size: number
+    epochs: number
+  }
+}
+
 export function TrainingList() {
   const navigate = useNavigate()
-  const [jobs, setJobs] = useState<TrainingJob[]>(mockJobs)
+  const [jobs, setJobs] = useState<TrainingJob[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([
+    { id: '1', name: 'ImageNet-1K' },
+    { id: '2', name: 'COCO 2017' },
+    { id: '3', name: 'GLUE Benchmark' },
+    { id: '4', name: 'Custom Dataset' },
+  ])
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+
+  // Form state
+  const [formData, setFormData] = useState<CreateJobFormData>({
+    name: '',
+    dataset_id: '',
+    gpu_count: 1,
+    config: {
+      learning_rate: 0.001,
+      batch_size: 32,
+      epochs: 10,
+    },
+  })
+
+  // Fetch jobs
+  const fetchJobs = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      // In a real app, we would pass pagination params to the API
+      const response = await trainingApi.list() as { jobs: TrainingJob[]; total: number }
+      if (response && response.jobs) {
+        setJobs(response.jobs)
+        setTotalCount(response.total || response.jobs.length)
+      } else {
+        // Fallback to empty array if response format differs
+        setJobs(Array.isArray(response) ? response : [])
+        setTotalCount(Array.isArray(response) ? response.length : 0)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '获取训练任务失败')
+      // Keep existing jobs on error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchJobs()
+  }, [])
 
   // Filter jobs
   const filteredJobs = jobs.filter((job) => {
     const matchesSearch = job.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.modelType.toLowerCase().includes(searchQuery.toLowerCase())
+                         job.modelType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         job.dataset?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || job.status === statusFilter
-    const matchesPriority = priorityFilter === 'all' || job.priority === priorityFilter
-    return matchesSearch && matchesStatus && matchesPriority
+    return matchesSearch && matchesStatus
   })
 
-  const handleCreateJob = (e: React.FormEvent) => {
+  // Pagination
+  const paginatedJobs = filteredJobs.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const totalPages = Math.ceil(filteredJobs.length / pageSize)
+
+  const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
+    setIsSubmitting(true)
+    try {
+      await trainingApi.create({
+        name: formData.name,
+        dataset_id: formData.dataset_id,
+        gpu_count: formData.gpu_count,
+        config: formData.config,
+      })
       setIsCreateDialogOpen(false)
-    }, 1000)
+      setFormData({
+        name: '',
+        dataset_id: '',
+        gpu_count: 1,
+        config: {
+          learning_rate: 0.001,
+          batch_size: 32,
+          epochs: 10,
+        },
+      })
+      fetchJobs() // Refresh list
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '创建任务失败')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handleAction = (action: string, jobId: string) => {
-    console.log(`${action} job ${jobId}`)
-    // Implement action logic
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm('确定要删除这个训练任务吗？')) return
+    try {
+      await trainingApi.delete(jobId)
+      fetchJobs() // Refresh list
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '删除任务失败')
+    }
+  }
+
+  const handleStopJob = async (jobId: string) => {
+    if (!confirm('确定要停止这个训练任务吗？')) return
+    try {
+      await trainingApi.stop(jobId)
+      fetchJobs() // Refresh list
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '停止任务失败')
+    }
   }
 
   return (
@@ -105,89 +201,13 @@ export function TrainingList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Training Jobs</h1>
-          <p className="text-muted-foreground">Manage your AI training workloads</p>
+          <h1 className="text-2xl font-bold tracking-tight">训练任务</h1>
+          <p className="text-muted-foreground">管理您的 AI 训练工作负载</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Training Job
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Create Training Job</DialogTitle>
-              <DialogDescription>
-                Configure your new training job. Fill in the details below.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateJob} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Job Name</label>
-                <Input placeholder="e.g., ResNet-50 Training" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Model Type</label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="resnet">ResNet</SelectItem>
-                      <SelectItem value="bert">BERT</SelectItem>
-                      <SelectItem value="gpt">GPT</SelectItem>
-                      <SelectItem value="yolo">YOLO</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Dataset</label>
-                  <Input placeholder="Dataset name" required />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">GPU Count</label>
-                  <Select defaultValue="1">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select GPUs" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 GPU</SelectItem>
-                      <SelectItem value="2">2 GPUs</SelectItem>
-                      <SelectItem value="4">4 GPUs</SelectItem>
-                      <SelectItem value="8">8 GPUs</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Priority</label>
-                  <Select defaultValue="normal">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? <><Spinner className="mr-2" size="sm" /> Creating...</> : 'Create Job'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          新建训练任务
+        </Button>
       </div>
 
       {/* Filters */}
@@ -197,38 +217,33 @@ export function TrainingList() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search jobs..."
+                placeholder="搜索任务名称、模型类型或数据集..."
                 className="pl-10"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1)
+                }}
               />
             </div>
             <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
                 <SelectTrigger className="w-[140px]">
                   <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Status" />
+                  <SelectValue placeholder="状态" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="running">Running</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="pending">待处理</SelectItem>
+                  <SelectItem value="running">运行中</SelectItem>
+                  <SelectItem value="completed">已完成</SelectItem>
+                  <SelectItem value="failed">失败</SelectItem>
+                  <SelectItem value="cancelled">已取消</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+              <Button variant="outline" size="icon" onClick={fetchJobs} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -239,34 +254,50 @@ export function TrainingList() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>All Jobs</CardTitle>
-              <CardDescription>{filteredJobs.length} jobs found</CardDescription>
+              <CardTitle>全部任务</CardTitle>
+              <CardDescription>共 {filteredJobs.length} 个任务</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
+          
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead>任务名称</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>进度</TableHead>
                   <TableHead>GPU</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>运行时长</TableHead>
+                  <TableHead>创建时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredJobs.length === 0 ? (
+                {loading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center">
-                      No jobs found
+                      <div className="flex items-center justify-center gap-2">
+                        <Spinner size="sm" />
+                        加载中...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedJobs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      暂无训练任务
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredJobs.map((job) => (
+                  paginatedJobs.map((job) => (
                     <TableRow
                       key={job.id}
                       className="cursor-pointer"
@@ -278,7 +309,7 @@ export function TrainingList() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusColors[job.status]}>
-                          {job.status}
+                          {statusLabels[job.status]}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -289,7 +320,7 @@ export function TrainingList() {
                               style={{ width: `${job.progress}%` }}
                             />
                           </div>
-                          <span className="text-xs text-muted-foreground">{job.progress}%</span>
+                          <span className="text-xs text-muted-foreground w-8">{job.progress}%</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -312,22 +343,24 @@ export function TrainingList() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          {job.status === 'pending' && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleAction('start', job.id)}>
-                              <Play className="h-4 w-4" />
+                          {job.status === 'running' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleStopJob(job.id)}
+                              title="停止"
+                            >
+                              <Square className="h-4 w-4" />
                             </Button>
                           )}
-                          {job.status === 'running' && (
-                            <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleAction('pause', job.id)}>
-                                <Pause className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleAction('stop', job.id)}>
-                                <Square className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleAction('delete', job.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDeleteJob(job.id)}
+                            title="删除"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -340,21 +373,145 @@ export function TrainingList() {
           </div>
 
           {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredJobs.length} of {jobs.length} jobs
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                显示 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredJobs.length)} 共 {filteredJobs.length} 个任务
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">{currentPage} / {totalPages}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" disabled>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Create Job Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>创建训练任务</DialogTitle>
+            <DialogDescription>
+              配置您的新训练任务。请填写以下详细信息。
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateJob} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">任务名称</label>
+              <Input
+                placeholder="例如：ResNet-50 图像分类"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">选择数据集</label>
+              <Select
+                required
+                value={formData.dataset_id}
+                onValueChange={(v) => setFormData({ ...formData, dataset_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择数据集" />
+                </SelectTrigger>
+                <SelectContent>
+                  {datasets.map((ds) => (
+                    <SelectItem key={ds.id} value={ds.id}>{ds.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">GPU 数量</label>
+                <Select
+                  value={formData.gpu_count.toString()}
+                  onValueChange={(v) => setFormData({ ...formData, gpu_count: parseInt(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择 GPU" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 GPU</SelectItem>
+                    <SelectItem value="2">2 GPUs</SelectItem>
+                    <SelectItem value="4">4 GPUs</SelectItem>
+                    <SelectItem value="8">8 GPUs</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Batch Size</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.config.batch_size}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    config: { ...formData.config, batch_size: parseInt(e.target.value) }
+                  })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">学习率</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min={0}
+                  value={formData.config.learning_rate}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    config: { ...formData.config, learning_rate: parseFloat(e.target.value) }
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">训练轮数</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.config.epochs}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    config: { ...formData.config, epochs: parseInt(e.target.value) }
+                  })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !formData.name || !formData.dataset_id}>
+                {isSubmitting ? (
+                  <>
+                    <Spinner className="mr-2" size="sm" />
+                    创建中...
+                  </>
+                ) : '创建任务'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
