@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/database"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/logger"
 	pkgRedis "github.com/plucky-groove3/ai-train-infer-platform/pkg/redis"
@@ -41,19 +42,19 @@ func main() {
 	// 初始化数据库
 	db, err := database.NewFromURL(cfg.DatabaseURL, 0)
 	if err != nil {
-		logger.Fatal("Failed to connect to database", logger.WithField("error", err))
+		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 
 	// 测试数据库连接
 	if err := database.HealthCheck(db); err != nil {
-		logger.Fatal("Database health check failed", logger.WithField("error", err))
+		logger.Fatal("Database health check failed", zap.Error(err))
 	}
 	logger.Info("Database connected")
 
 	// 初始化 Redis
 	redisClient, err := pkgRedis.NewFromURL(cfg.RedisURL)
 	if err != nil {
-		logger.Fatal("Failed to connect to Redis", logger.WithField("error", err))
+		logger.Fatal("Failed to connect to Redis", zap.Error(err))
 	}
 	defer redisClient.Close()
 	logger.Info("Redis connected")
@@ -114,11 +115,11 @@ func main() {
 	// 优雅关闭
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", logger.WithField("error", err))
+			logger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
-	logger.Info("Training Service started", logger.WithField("port", cfg.Port))
+	logger.Info("Training Service started", zap.String("port", cfg.Port))
 
 	// 等待中断信号
 	quit := make(chan os.Signal, 1)
@@ -132,7 +133,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown", logger.WithField("error", err))
+		logger.Error("Server forced to shutdown", zap.Error(err))
 	}
 
 	logger.Info("Training Service stopped")
@@ -175,11 +176,11 @@ func requestLogger() gin.HandlerFunc {
 		}
 
 		logger.Info("HTTP Request",
-			logger.WithField("client_ip", clientIP),
-			logger.WithField("method", method),
-			logger.WithField("path", path),
-			logger.WithField("status", statusCode),
-			logger.WithField("latency", latency),
+			zap.String("client_ip", clientIP),
+			zap.String("method", method),
+			zap.String("path", path),
+			zap.Int("status", statusCode),
+			zap.Duration("latency", latency),
 		)
 	}
 }
@@ -192,10 +193,10 @@ func errorHandler() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
 			logger.Error("Request error",
-				logger.WithField("error", err.Error()),
-				logger.WithField("path", c.Request.URL.Path),
+				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
 			)
-			response.InternalServerError(c, err.Error())
+			response.Error(c, http.StatusInternalServerError, err.Error())
 		}
 	}
 }

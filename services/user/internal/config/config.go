@@ -8,6 +8,7 @@ import (
 	"github.com/ai-train-infer-platform/pkg/database"
 	"github.com/ai-train-infer-platform/pkg/jwt"
 	"github.com/ai-train-infer-platform/pkg/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // Config 应用配置
@@ -109,17 +110,17 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getDatabaseLogLevel(level string) int {
+func getDatabaseLogLevel(level string) gormlogger.LogLevel {
 	switch level {
 	case "silent":
-		return 1
+		return gormlogger.Silent
 	case "error":
-		return 2
+		return gormlogger.Error
 	case "warn":
-		return 3
+		return gormlogger.Warn
 	case "info":
-		return 4
+		return gormlogger.Info
 	default:
-		return 4
+		return gormlogger.Info
 	}
 }
