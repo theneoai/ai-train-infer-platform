@@ -1,67 +1,78 @@
 import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+import { useAuthStore } from '../stores/auth'
+import { ProtectedRoute } from '../components/ProtectedRoute'
 import { 
   LayoutDashboard, 
   Cpu, 
-  Server, 
-  FlaskConical, 
-  Beaker, 
-  Bot,
+  Database, 
+  Server,
+  LogOut,
   User
 } from 'lucide-react'
 
 export const rootRoute = createRootRoute({
-  component: () => (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="flex h-14 items-center px-4">
-          <div className="flex items-center gap-2 font-semibold text-lg">
-            <Bot className="h-6 w-6 text-primary" />
-            <span>AITIP</span>
-          </div>
-          <nav className="flex items-center gap-6 ml-8">
-            <Link to="/" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <LayoutDashboard className="h-4 w-4" />
-              Dashboard
-            </Link>
-            <Link to="/training" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <Cpu className="h-4 w-4" />
-              Training
-            </Link>
-            <Link to="/inference" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <Server className="h-4 w-4" />
-              Inference
-            </Link>
-            <Link to="/simulation" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <FlaskConical className="h-4 w-4" />
-              Simulation
-            </Link>
-            <Link to="/experiments" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <Beaker className="h-4 w-4" />
-              Experiments
-            </Link>
-            <Link to="/agent" className="[&.active]:text-primary flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <Bot className="h-4 w-4" />
-              Agent
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-4">
-            <button className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <User className="h-4 w-4" />
-              <span>Admin</span>
-            </button>
-          </div>
+  component: () => {
+    const { user, logout } = useAuthStore()
+    const isLoginPage = window.location.pathname === '/login'
+
+    if (isLoginPage) {
+      return <Outlet />
+    }
+
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50">
+          {/* Header */}
+          <header className="bg-white border-b">
+            <div className="flex h-16 items-center px-6">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold">AI</span>
+                </div>
+                <span className="text-xl font-semibold">AITIP</span>
+              </div>
+
+              <nav className="flex items-center gap-6 ml-10">
+                <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <Link to="/training" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                  <Cpu className="h-4 w-4" />
+                  Training
+                </Link>
+                <Link to="/datasets" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                  <Database className="h-4 w-4" />
+                  Datasets
+                </Link>
+                <Link to="/inference" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                  <Server className="h-4 w-4" />
+                  Inference
+                </Link>
+              </nav>
+
+              <div className="ml-auto flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <User className="h-4 w-4" />
+                  {user?.email}
+                </div>
+                <button 
+                  onClick={logout}
+                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="p-6">
+            <Outlet />
+          </main>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="p-6">
-        <Outlet />
-      </main>
-
-      {/* DevTools */}
-      {process.env.NODE_ENV === 'development' && <TanStackRouterDevtools />}
-    </div>
-  ),
+      </ProtectedRoute>
+    )
+  },
 })

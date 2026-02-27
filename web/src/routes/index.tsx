@@ -1,50 +1,71 @@
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, createRouter } from '@tanstack/react-router'
 import { rootRoute } from './__root'
+import { LoginPage } from '../pages/LoginPage'
+import { Dashboard } from '../pages/Dashboard'
+import { TrainingList } from '../pages/training/TrainingList'
+import { TrainingDetail } from '../pages/training/TrainingDetail'
+import { DatasetList } from '../pages/dataset/DatasetList'
+import { InferenceList } from '../pages/inference/InferenceList'
 
-// Dashboard
+// Login route (public)
+export const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  component: LoginPage,
+})
+
+// Dashboard route
 export const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => import('../pages/Dashboard').then(m => m.Dashboard),
+  component: Dashboard,
 })
 
 // Training routes
 export const trainingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/training',
-  component: () => import('../pages/training/TrainingList').then(m => m.TrainingList),
+  component: TrainingList,
 })
 
 export const trainingDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/training/$jobId',
-  component: () => import('../pages/training/TrainingDetail').then(m => m.TrainingDetail),
+  component: TrainingDetail,
+})
+
+// Dataset routes
+export const datasetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/datasets',
+  component: DatasetList,
 })
 
 // Inference routes
 export const inferenceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inference',
-  component: () => import('../pages/inference/InferenceList').then(m => m.InferenceList),
+  component: InferenceList,
 })
 
-// Simulation routes
-export const simulationRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/simulation',
-  component: () => import('../pages/simulation/SimulationList').then(m => m.SimulationList),
+// Create router
+export const routeTree = rootRoute.addChildren([
+  loginRoute,
+  dashboardRoute,
+  trainingRoute,
+  trainingDetailRoute,
+  datasetRoute,
+  inferenceRoute,
+])
+
+export const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
 })
 
-// Experiment routes
-export const experimentsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/experiments',
-  component: () => import('../pages/experiments/ExperimentList').then(m => m.ExperimentList),
-})
-
-// Agent routes
-export const agentRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/agent',
-  component: () => import('../pages/agent/AgentConsole').then(m => m.AgentConsole),
-})
+// Register router for type safety
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}

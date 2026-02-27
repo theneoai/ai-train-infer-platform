@@ -62,14 +62,14 @@ func (h *DatasetHandler) RegisterRoutes(router *gin.RouterGroup) {
 func (h *DatasetHandler) Create(c *gin.Context) {
 	var req domain.DatasetCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("invalid request: %v", err))
 		return
 	}
 
 	resp, err := h.service.Create(c.Request.Context(), &req)
 	if err != nil {
 		logger.Error("failed to create dataset", zap.Error(err))
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
 		return
 	}
 
@@ -80,12 +80,12 @@ func (h *DatasetHandler) Create(c *gin.Context) {
 func (h *DatasetHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		response.BadRequest(c, "dataset id is required")
+		response.Error(c, http.StatusBadRequest, "dataset id is required")
 		return
 	}
 
 	if _, err := uuid.Parse(id); err != nil {
-		response.BadRequest(c, "invalid dataset id format")
+		response.Error(c, http.StatusBadRequest, "invalid dataset id format")
 		return
 	}
 
@@ -93,10 +93,10 @@ func (h *DatasetHandler) GetByID(c *gin.Context) {
 	if err != nil {
 		logger.Error("failed to get dataset", zap.Error(err), zap.String("id", id))
 		if err.Error() == "dataset not found" {
-			response.NotFound(c, "dataset")
+			response.Error(c, http.StatusNotFound, "dataset not found")
 			return
 		}
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -140,24 +140,37 @@ func (h *DatasetHandler) List(c *gin.Context) {
 	resp, err := h.service.List(c.Request.Context(), query)
 	if err != nil {
 		logger.Error("failed to list datasets", zap.Error(err))
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.PageSuccess(c, resp.Datasets, query.Page, query.PageSize, resp.Total)
+	// 计算总页数
+	totalPages := int(resp.Total) / query.PageSize
+	if int(resp.Total)%query.PageSize > 0 {
+		totalPages++
+	}
+
+	meta := &response.MetaInfo{
+		Page:      query.Page,
+		PageSize:  query.PageSize,
+		Total:     resp.Total,
+		TotalPage: totalPages,
+	}
+
+	response.SuccessWithMeta(c, resp.Datasets, meta)
 }
 
 // Update 更新数据集
 func (h *DatasetHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		response.BadRequest(c, "dataset id is required")
+		response.Error(c, http.StatusBadRequest, "dataset id is required")
 		return
 	}
 
 	var req domain.DatasetUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("invalid request: %v", err))
 		return
 	}
 
@@ -165,10 +178,10 @@ func (h *DatasetHandler) Update(c *gin.Context) {
 	if err != nil {
 		logger.Error("failed to update dataset", zap.Error(err), zap.String("id", id))
 		if err.Error() == "dataset not found" {
-			response.NotFound(c, "dataset")
+			response.Error(c, http.StatusNotFound, "dataset not found")
 			return
 		}
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
 		return
 	}
 
@@ -179,17 +192,17 @@ func (h *DatasetHandler) Update(c *gin.Context) {
 func (h *DatasetHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		response.BadRequest(c, "dataset id is required")
+		response.Error(c, http.StatusBadRequest, "dataset id is required")
 		return
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		logger.Error("failed to delete dataset", zap.Error(err), zap.String("id", id))
 		if err.Error() == "dataset not found" {
-			response.NotFound(c, "dataset")
+			response.Error(c, http.StatusNotFound, "dataset not found")
 			return
 		}
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -201,21 +214,21 @@ func (h *DatasetHandler) Upload(c *gin.Context) {
 	// 获取项目 ID
 	projectID := c.PostForm("project_id")
 	if projectID == "" {
-		response.BadRequest(c, "project_id is required")
+		response.Error(c, http.StatusBadRequest, "project_id is required")
 		return
 	}
 
 	// 获取文件
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		response.BadRequest(c, fmt.Sprintf("failed to get file: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("failed to get file: %v", err))
 		return
 	}
 	defer file.Close()
 
 	// 检查文件大小
 	if header.Size > h.config.MaxSize {
-		response.ErrorWithMessage(c, response.ErrorInvalidParams,
+		response.ErrorWithCode(c, http.StatusBadRequest, "FILE_TOO_LARGE",
 			fmt.Sprintf("file size exceeds maximum limit of %d bytes", h.config.MaxSize))
 		return
 	}
@@ -240,14 +253,14 @@ func (h *DatasetHandler) Upload(c *gin.Context) {
 	datasetResp, err := h.service.Create(c.Request.Context(), createReq)
 	if err != nil {
 		logger.Error("failed to create dataset", zap.Error(err))
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "CREATE_FAILED", err.Error())
 		return
 	}
 
 	// 上传文件
 	if err := h.service.UploadFile(c.Request.Context(), datasetResp.ID.String(), header.Filename, file, header.Size); err != nil {
 		logger.Error("failed to upload file", zap.Error(err))
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -265,14 +278,14 @@ func (h *DatasetHandler) Upload(c *gin.Context) {
 func (h *DatasetHandler) InitUpload(c *gin.Context) {
 	var req domain.UploadInitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("invalid request: %v", err))
 		return
 	}
 
 	resp, err := h.service.InitUpload(c.Request.Context(), &req)
 	if err != nil {
 		logger.Error("failed to init upload", zap.Error(err))
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "INIT_FAILED", err.Error())
 		return
 	}
 
@@ -283,26 +296,26 @@ func (h *DatasetHandler) InitUpload(c *gin.Context) {
 func (h *DatasetHandler) UploadChunk(c *gin.Context) {
 	uploadID := c.PostForm("upload_id")
 	if uploadID == "" {
-		response.BadRequest(c, "upload_id is required")
+		response.Error(c, http.StatusBadRequest, "upload_id is required")
 		return
 	}
 
 	chunkIndexStr := c.PostForm("chunk_index")
 	if chunkIndexStr == "" {
-		response.BadRequest(c, "chunk_index is required")
+		response.Error(c, http.StatusBadRequest, "chunk_index is required")
 		return
 	}
 
 	chunkIndex, err := strconv.Atoi(chunkIndexStr)
 	if err != nil || chunkIndex < 0 {
-		response.BadRequest(c, "invalid chunk_index")
+		response.Error(c, http.StatusBadRequest, "invalid chunk_index")
 		return
 	}
 
 	// 获取分片数据
 	file, _, err := c.Request.FormFile("chunk")
 	if err != nil {
-		response.BadRequest(c, fmt.Sprintf("failed to get chunk: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("failed to get chunk: %v", err))
 		return
 	}
 	defer file.Close()
@@ -311,7 +324,7 @@ func (h *DatasetHandler) UploadChunk(c *gin.Context) {
 		logger.Error("failed to upload chunk", zap.Error(err),
 			zap.String("upload_id", uploadID),
 			zap.Int("chunk_index", chunkIndex))
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -326,14 +339,14 @@ func (h *DatasetHandler) UploadChunk(c *gin.Context) {
 func (h *DatasetHandler) CompleteUpload(c *gin.Context) {
 	var req domain.UploadCompleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, fmt.Sprintf("invalid request: %v", err))
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("invalid request: %v", err))
 		return
 	}
 
 	resp, err := h.service.CompleteUpload(c.Request.Context(), req.UploadID, req.Checksum)
 	if err != nil {
 		logger.Error("failed to complete upload", zap.Error(err), zap.String("upload_id", req.UploadID))
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "COMPLETE_FAILED", err.Error())
 		return
 	}
 
@@ -344,34 +357,34 @@ func (h *DatasetHandler) CompleteUpload(c *gin.Context) {
 func (h *DatasetHandler) GetUploadProgress(c *gin.Context) {
 	uploadID := c.Param("upload_id")
 	if uploadID == "" {
-		response.BadRequest(c, "upload_id is required")
+		response.Error(c, http.StatusBadRequest, "upload_id is required")
 		return
 	}
 
 	progress, err := h.service.GetUploadProgress(c.Request.Context(), uploadID)
 	if err != nil {
 		logger.Error("failed to get upload progress", zap.Error(err), zap.String("upload_id", uploadID))
-		response.InternalServerError(c, err.Error())
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if progress == nil {
-		response.NotFound(c, "upload progress")
+		response.Error(c, http.StatusNotFound, "upload progress not found")
 		return
 	}
 
 	response.Success(c, gin.H{
-		"upload_id":       progress.UploadID,
-		"dataset_id":      progress.DatasetID,
-		"filename":        progress.Filename,
-		"total_size":      progress.TotalSize,
-		"uploaded_size":   progress.UploadedSize,
-		"progress_percent": progress.ProgressPercentage(),
-		"total_chunks":    progress.TotalChunks,
-		"uploaded_chunks": len(progress.UploadedChunks),
-		"status":          progress.Status,
-		"created_at":      progress.CreatedAt,
-		"updated_at":      progress.UpdatedAt,
+		"upload_id":         progress.UploadID,
+		"dataset_id":        progress.DatasetID,
+		"filename":          progress.Filename,
+		"total_size":        progress.TotalSize,
+		"uploaded_size":     progress.UploadedSize,
+		"progress_percent":  progress.ProgressPercentage(),
+		"total_chunks":      progress.TotalChunks,
+		"uploaded_chunks":   len(progress.UploadedChunks),
+		"status":            progress.Status,
+		"created_at":        progress.CreatedAt,
+		"updated_at":        progress.UpdatedAt,
 	})
 }
 
@@ -379,7 +392,7 @@ func (h *DatasetHandler) GetUploadProgress(c *gin.Context) {
 func (h *DatasetHandler) Download(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		response.BadRequest(c, "dataset id is required")
+		response.Error(c, http.StatusBadRequest, "dataset id is required")
 		return
 	}
 
@@ -387,10 +400,10 @@ func (h *DatasetHandler) Download(c *gin.Context) {
 	if err != nil {
 		logger.Error("failed to get download url", zap.Error(err), zap.String("id", id))
 		if err.Error() == "dataset not found" {
-			response.NotFound(c, "dataset")
+			response.Error(c, http.StatusNotFound, "dataset not found")
 			return
 		}
-		response.ErrorWithMessage(c, response.ErrorInvalidParams, err.Error())
+		response.ErrorWithCode(c, http.StatusBadRequest, "DOWNLOAD_FAILED", err.Error())
 		return
 	}
 
@@ -405,29 +418,11 @@ func (h *DatasetHandler) Download(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// GetUploadConfig 获取上传配置（用于客户端配置）
-func (h *DatasetHandler) GetUploadConfig(c *gin.Context) {
-	response.Success(c, gin.H{
-		"max_size":         h.config.MaxSize,
-		"chunk_size":       h.config.ChunkSize,
-		"allowed_formats":  h.config.AllowedFormats,
-	})
-}
-
 // HealthCheck 健康检查
 func HealthCheck(c *gin.Context) {
 	response.Success(c, gin.H{
 		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
 		"service":   "data-service",
-	})
-}
-
-// Stats 统计信息
-func (h *DatasetHandler) Stats(c *gin.Context) {
-	// 这里可以添加统计数据，如总数据集数、总存储量等
-	response.Success(c, gin.H{
-		"service": "data-service",
-		"version": "1.0.0",
 	})
 }
