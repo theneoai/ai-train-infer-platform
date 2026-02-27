@@ -43,13 +43,30 @@ type ExperimentConfig struct {
 
 // ToModel 转换为数据库模型
 func (e *Experiment) ToModel() *models.Experiment {
+	config := models.JSON{}
+	if e.Config.ModelName != "" {
+		config["model_name"] = e.Config.ModelName
+	}
+	if e.Config.DatasetPath != "" {
+		config["dataset_path"] = e.Config.DatasetPath
+	}
+	if e.Config.Framework != "" {
+		config["framework"] = e.Config.Framework
+	}
+	if e.Config.TaskType != "" {
+		config["task_type"] = e.Config.TaskType
+	}
+	if e.Config.Hyperparameters != nil {
+		config["hyperparameters"] = e.Config.Hyperparameters
+	}
+
 	return &models.Experiment{
 		ID:          e.ID,
 		Name:        e.Name,
 		Description: e.Description,
 		ProjectID:   e.ProjectID,
 		UserID:      e.UserID,
-		Config:      models.JSON(e.Config),
+		Config:      config,
 		Tags:        e.Tags,
 		Status:      string(e.Status),
 		CreatedAt:   e.CreatedAt,
@@ -69,25 +86,21 @@ func (e *Experiment) FromModel(m *models.Experiment) {
 	e.CreatedAt = m.CreatedAt
 	e.UpdatedAt = m.UpdatedAt
 	if m.Config != nil {
-		cfg := ExperimentConfig{}
-		if data, ok := m.Config.(map[string]interface{}); ok {
-			if v, ok := data["model_name"].(string); ok {
-				cfg.ModelName = v
-			}
-			if v, ok := data["dataset_path"].(string); ok {
-				cfg.DatasetPath = v
-			}
-			if v, ok := data["hyperparameters"].(map[string]interface{}); ok {
-				cfg.Hyperparameters = v
-			}
-			if v, ok := data["framework"].(string); ok {
-				cfg.Framework = v
-			}
-			if v, ok := data["task_type"].(string); ok {
-				cfg.TaskType = v
-			}
+		if v, ok := m.Config["model_name"].(string); ok {
+			e.Config.ModelName = v
 		}
-		e.Config = cfg
+		if v, ok := m.Config["dataset_path"].(string); ok {
+			e.Config.DatasetPath = v
+		}
+		if v, ok := m.Config["framework"].(string); ok {
+			e.Config.Framework = v
+		}
+		if v, ok := m.Config["task_type"].(string); ok {
+			e.Config.TaskType = v
+		}
+		if v, ok := m.Config["hyperparameters"].(map[string]interface{}); ok {
+			e.Config.Hyperparameters = v
+		}
 	}
 }
 
@@ -115,13 +128,29 @@ type RunConfig struct {
 
 // ToModel 转换为数据库模型
 func (r *Run) ToModel() *models.Run {
+	config := models.JSON{}
+	if r.Config.Hyperparameters != nil {
+		config["hyperparameters"] = r.Config.Hyperparameters
+	}
+	if r.Config.Resources != nil {
+		config["resources"] = r.Config.Resources
+	}
+	if r.Config.Environment != nil {
+		config["environment"] = r.Config.Environment
+	}
+
+	metricsSummary := models.JSON{}
+	for k, v := range r.MetricsSummary {
+		metricsSummary[k] = v
+	}
+
 	return &models.Run{
 		ID:             r.ID,
 		ExperimentID:   r.ExperimentID,
 		RunType:        r.RunType,
 		Status:         r.Status,
-		Config:         models.JSON(r.Config),
-		MetricsSummary: models.JSON(r.MetricsSummary),
+		Config:         config,
+		MetricsSummary: metricsSummary,
 		StartedAt:      r.StartedAt,
 		EndedAt:        r.EndedAt,
 		Duration:       r.Duration,
@@ -143,14 +172,17 @@ func (r *Run) FromModel(m *models.Run) {
 	r.UpdatedAt = m.UpdatedAt
 
 	if m.Config != nil {
-		if cfg, ok := m.Config.(map[string]interface{}); ok {
-			r.Config.Hyperparameters, _ = cfg["hyperparameters"].(map[string]interface{})
-			r.Config.Resources, _ = cfg["resources"].(map[string]interface{})
-			r.Config.Environment, _ = cfg["environment"].(map[string]string)
-		}
+		r.Config.Hyperparameters, _ = m.Config["hyperparameters"].(map[string]interface{})
+		r.Config.Resources, _ = m.Config["resources"].(map[string]interface{})
+		r.Config.Environment, _ = m.Config["environment"].(map[string]string)
 	}
 	if m.MetricsSummary != nil {
-		r.MetricsSummary, _ = m.MetricsSummary.(map[string]float64)
+		r.MetricsSummary = make(map[string]float64)
+		for k, v := range m.MetricsSummary {
+			if fv, ok := v.(float64); ok {
+				r.MetricsSummary[k] = fv
+			}
+		}
 	}
 }
 

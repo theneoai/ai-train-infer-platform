@@ -110,7 +110,23 @@ func (r *experimentRepository) Update(ctx context.Context, exp *domain.Experimen
 		updates["status"] = string(exp.Status)
 	}
 	if exp.Config.ModelName != "" || exp.Config.Framework != "" {
-		updates["config"] = models.JSON(exp.Config)
+		config := models.JSON{}
+		if exp.Config.ModelName != "" {
+			config["model_name"] = exp.Config.ModelName
+		}
+		if exp.Config.DatasetPath != "" {
+			config["dataset_path"] = exp.Config.DatasetPath
+		}
+		if exp.Config.Framework != "" {
+			config["framework"] = exp.Config.Framework
+		}
+		if exp.Config.TaskType != "" {
+			config["task_type"] = exp.Config.TaskType
+		}
+		if exp.Config.Hyperparameters != nil {
+			config["hyperparameters"] = exp.Config.Hyperparameters
+		}
+		updates["config"] = config
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.Experiment{}).Where("id = ?", exp.ID).Updates(updates)
@@ -271,9 +287,14 @@ func (r *runRepository) GetByExperimentID(ctx context.Context, experimentID uuid
 func (r *runRepository) Update(ctx context.Context, run *domain.Run) error {
 	logger.Log.Debug("Updating run", zap.String("id", run.ID.String()))
 
+	metricsSummary := models.JSON{}
+	for k, v := range run.MetricsSummary {
+		metricsSummary[k] = v
+	}
+
 	result := r.db.WithContext(ctx).Model(&models.Run{}).Where("id = ?", run.ID).Updates(map[string]interface{}{
 		"status":          run.Status,
-		"metrics_summary": models.JSON(run.MetricsSummary),
+		"metrics_summary": metricsSummary,
 		"started_at":      run.StartedAt,
 		"ended_at":        run.EndedAt,
 		"duration":        run.Duration,
@@ -320,8 +341,13 @@ func (r *runRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status s
 }
 
 func (r *runRepository) UpdateMetricsSummary(ctx context.Context, id uuid.UUID, summary map[string]float64) error {
+	metricsSummary := models.JSON{}
+	for k, v := range summary {
+		metricsSummary[k] = v
+	}
+
 	result := r.db.WithContext(ctx).Model(&models.Run{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"metrics_summary": models.JSON(summary),
+		"metrics_summary": metricsSummary,
 		"updated_at":      time.Now(),
 	})
 
@@ -415,7 +441,7 @@ func (r *metricRepository) GetByRunID(ctx context.Context, runID uuid.UUID, keys
 			CreatedAt: m.CreatedAt,
 		}
 		if m.Metadata != nil {
-			metrics[i].Metadata, _ = m.Metadata.(map[string]interface{})
+			metrics[i].Metadata = m.Metadata
 		}
 	}
 
@@ -532,6 +558,11 @@ func NewArtifactRepository(db *gorm.DB) ArtifactRepository {
 }
 
 func (r *artifactRepository) Create(ctx context.Context, artifact *domain.Artifact) error {
+	metadata := models.JSON{}
+	for k, v := range artifact.Metadata {
+		metadata[k] = v
+	}
+
 	model := &models.Artifact{
 		ID:          artifact.ID,
 		RunID:       artifact.RunID,
@@ -539,7 +570,7 @@ func (r *artifactRepository) Create(ctx context.Context, artifact *domain.Artifa
 		Type:        artifact.Type,
 		StoragePath: artifact.StoragePath,
 		Size:        artifact.Size,
-		Metadata:    models.JSON(artifact.Metadata),
+		Metadata:    metadata,
 	}
 
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
@@ -570,7 +601,7 @@ func (r *artifactRepository) GetByRunID(ctx context.Context, runID uuid.UUID) ([
 			CreatedAt:   m.CreatedAt,
 		}
 		if m.Metadata != nil {
-			artifacts[i].Metadata, _ = m.Metadata.(map[string]interface{})
+			artifacts[i].Metadata = m.Metadata
 		}
 	}
 
@@ -596,7 +627,7 @@ func (r *artifactRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 		CreatedAt:   model.CreatedAt,
 	}
 	if model.Metadata != nil {
-		artifact.Metadata, _ = model.Metadata.(map[string]interface{})
+		artifact.Metadata = model.Metadata
 	}
 
 	return artifact, nil

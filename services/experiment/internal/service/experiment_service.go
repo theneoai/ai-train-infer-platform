@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/plucky-groove3/ai-train-infer-platform/pkg/logger"
-	"github.com/plucky-groove3/ai-train-infer-platform/pkg/models"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/experiment/internal/domain"
 	"github.com/plucky-groove3/ai-train-infer-platform/services/experiment/internal/repository"
 	"go.uber.org/zap"
