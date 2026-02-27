@@ -1,0 +1,72 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+go.work
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+dist-ssr/
+*.local
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Build outputs
+build/
+out/
+
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# Test
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Misc
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
