@@ -69,8 +69,20 @@ export const trainingApi = {
 // Inference API
 export const inferenceApi = {
   list: () => api.get('/inference/services'),
-  create: (data: { name: string; model_id: string; config: Record<string, unknown> }) =>
-    api.post('/inference/services', data),
+  create: (data: { 
+    name: string
+    model_id: string
+    runtime: string
+    gpu_count: number
+    config?: Record<string, unknown> 
+  }) => api.post('/inference/services', data),
   get: (id: string) => api.get(`/inference/services/${id}`),
   delete: (id: string) => api.delete(`/inference/services/${id}`),
+  start: (id: string) => api.post(`/inference/services/${id}/start`),
+  stop: (id: string) => api.post(`/inference/services/${id}/stop`),
+}
+
+// Models API (for inference model selection)
+export const modelApi = {
+  list: () => api.get('/models'),
 }
